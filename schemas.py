@@ -5,6 +5,7 @@ from datetime import date as Date, time as Time
 class UserCreate(BaseModel):
     name: str
     email: str
+    password: str
 
 
 class UserResponse(BaseModel):
@@ -46,6 +47,15 @@ class BookingCreate(BaseModel):
 class UserUpdate(BaseModel):
     name: str | None = None
     email: str | None = None
+    
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
     
 class BookingUpdate(BaseModel):
     date: Date | None = None

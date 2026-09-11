@@ -8,6 +8,8 @@ from schemas import (
     UserCreate,
     UserResponse,
     UserUpdate,
+    LoginRequest,
+    TokenResponse,
     FacilityCreate,
     FacilityResponse,
     FacilityUpdate,
@@ -15,13 +17,61 @@ from schemas import (
     BookingResponse,
     BookingUpdate
 )
+from auth import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    decode_access_token
+)
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+security = HTTPBearer(auto_error=False)
 app = FastAPI()
 
 # Database session
 async def get_db():
     async with SessionLocal() as session:
         yield session
+        
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: AsyncSession = Depends(get_db)
+):
+    if credentials is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated"
+        )
+
+    try:
+        payload = decode_access_token(credentials.credentials)
+        user_id = int(payload["sub"])
+
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token"
+        )
+
+    result = await db.execute(
+        select(User).where(User.id == user_id)
+    )
+
+    current_user = result.scalar_one_or_none()
+
+    if current_user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="User not found"
+        )
+
+    return current_user
+
+@app.get("/users/me", response_model=UserResponse)
+async def get_my_profile(
+    current_user: User = Depends(get_current_user)
+):
+    return current_user
 
 
 @app.get("/health")
@@ -32,16 +82,18 @@ def health_check():
 @app.post("/users", response_model=UserResponse, status_code=201)
 async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
 
-    new_user = User(
-        name=user.name,
-        email=user.email
-    )
-
-    db.add(new_user)
-
     try:
+        new_user = User(
+            name=user.name,
+            email=user.email,
+            password_hash=hash_password(user.password)
+        )
+
+        db.add(new_user)
         await db.commit()
         await db.refresh(new_user)
+
+        return new_user
 
     except IntegrityError:
         await db.rollback()
@@ -50,8 +102,38 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
             detail="Email already exists"
         )
 
-    return new_user
+@app.post("/login", response_model=TokenResponse)
+async def login(
+    login_data: LoginRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(User).where(User.email == login_data.email)
+    )
 
+    user = result.scalar_one_or_none()
+
+    if (
+        user is None
+        or user.password_hash is None
+        or not verify_password(
+            login_data.password,
+            user.password_hash
+        )
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password"
+        )
+
+    access_token = create_access_token(user.id)
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+    
+    
 @app.get("/users", response_model=list[UserResponse])
 async def get_users(
     skip: int = Query(0, ge=0),
@@ -276,7 +358,8 @@ async def delete_facility(
 @app.post("/bookings", response_model=BookingResponse, status_code=201)
 async def create_booking(
     booking: BookingCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     # Check whether user exists
     user_result = await db.execute(
@@ -480,3 +563,4 @@ async def delete_booking(
     await db.delete(booking)
 
     await db.commit()
+    
