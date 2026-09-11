@@ -154,10 +154,14 @@ async def get_users(
 @app.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     result = await db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(
+            User.id == user_id,
+            User.id == current_user.id
+        )
     )
 
     user = result.scalar_one_or_none()
@@ -174,10 +178,14 @@ async def get_user(
 async def update_user(
     user_id: int,
     user: UserUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     result = await db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(
+            User.id == user_id,
+            User.id == current_user.id
+        )
     )
 
     existing_user = result.scalar_one_or_none()
@@ -212,10 +220,14 @@ async def update_user(
 @app.delete("/users/{user_id}", status_code=204)
 async def delete_user(
     user_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     result = await db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(
+            User.id == user_id,
+            User.id == current_user.id
+        )
     )
 
     user = result.scalar_one_or_none()
@@ -414,7 +426,7 @@ async def create_booking(
 
     # Create booking
     new_booking = Booking(
-        user_id=booking.user_id,
+        user_id=current_user.id,
         facility_id=booking.facility_id,
         date=booking.date,
         start_time=booking.start_time,
@@ -433,10 +445,12 @@ async def create_booking(
 async def get_bookings(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     result = await db.execute(
         select(Booking)
+        .where(Booking.user_id == current_user.id)
         .order_by(Booking.id)
         .offset(skip)
         .limit(limit)
@@ -449,10 +463,14 @@ async def get_bookings(
 @app.get("/bookings/{booking_id}", response_model=BookingResponse)
 async def get_booking(
     booking_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     result = await db.execute(
-        select(Booking).where(Booking.id == booking_id)
+        select(Booking).where(
+            Booking.id == booking_id,
+            Booking.user_id == current_user.id
+        )
     )
 
     booking = result.scalar_one_or_none()
@@ -469,11 +487,15 @@ async def get_booking(
 async def update_booking(
     booking_id: int,
     booking: BookingUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    # Find existing booking
+    # Find existing booking owned by the logged-in user
     result = await db.execute(
-        select(Booking).where(Booking.id == booking_id)
+        select(Booking).where(
+            Booking.id == booking_id,
+            Booking.user_id == current_user.id
+        )
     )
 
     existing_booking = result.scalar_one_or_none()
@@ -544,11 +566,15 @@ async def update_booking(
 @app.delete("/bookings/{booking_id}", status_code=204)
 async def delete_booking(
     booking_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    # Find the booking
+    # Find the booking owned by the logged-in user
     result = await db.execute(
-        select(Booking).where(Booking.id == booking_id)
+        select(Booking).where(
+            Booking.id == booking_id,
+            Booking.user_id == current_user.id
+        )
     )
 
     booking = result.scalar_one_or_none()
@@ -563,4 +589,3 @@ async def delete_booking(
     await db.delete(booking)
 
     await db.commit()
-    
