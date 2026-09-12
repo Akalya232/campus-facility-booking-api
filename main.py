@@ -23,6 +23,10 @@ from auth import (
     create_access_token,
     decode_access_token
 )
+from services.notification_service import (
+    send_booking_notification,
+    NotificationServiceError
+)
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import date as Date, time
 
@@ -435,10 +439,22 @@ async def create_booking(
         purpose=booking.purpose
     )
 
+    # Save email before committing
+    user_email = current_user.email
+
     db.add(new_booking)
 
     await db.commit()
     await db.refresh(new_booking)
+
+    try:
+        await send_booking_notification(
+            user_email,
+            f"Booking #{new_booking.id} has been confirmed"
+    )
+
+    except NotificationServiceError:
+        pass
 
     return new_booking
 
