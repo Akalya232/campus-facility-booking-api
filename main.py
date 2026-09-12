@@ -24,6 +24,7 @@ from auth import (
     decode_access_token
 )
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from datetime import date as Date, time
 
 security = HTTPBearer(auto_error=False)
 app = FastAPI()
@@ -443,18 +444,36 @@ async def create_booking(
 
 @app.get("/bookings", response_model=list[BookingResponse])
 async def get_bookings(
+    date: Date | None = None,
+    facility_id: int | None = None,
+    purpose: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    result = await db.execute(
+    query = (
         select(Booking)
         .where(Booking.user_id == current_user.id)
+    )
+
+    if date is not None:
+        query = query.where(Booking.date == date)
+
+    if facility_id is not None:
+        query = query.where(Booking.facility_id == facility_id)
+
+    if purpose is not None:
+        query = query.where(Booking.purpose.ilike(f"%{purpose}%"))
+
+    query = (
+        query
         .order_by(Booking.id)
         .offset(skip)
         .limit(limit)
     )
+
+    result = await db.execute(query)
 
     bookings = result.scalars().all()
 
