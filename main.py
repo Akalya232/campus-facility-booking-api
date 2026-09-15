@@ -29,10 +29,30 @@ from services.notification_service import (
 )
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import date as Date, time
+import logging
 
 security = HTTPBearer(auto_error=False)
 app = FastAPI()
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+logger = logging.getLogger(__name__)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.exception(
+        "Unexpected error on %s %s",
+        request.method,
+        request.url.path
+    )
+
+    return {
+        "detail": "An unexpected server error occurred"
+    }
+    
 # Database session
 async def get_db():
     async with SessionLocal() as session:
@@ -268,8 +288,21 @@ async def create_facility(
 
     db.add(new_facility)
 
-    await db.commit()
-    await db.refresh(new_facility)
+    try:
+        await db.commit()
+        await db.refresh(new_facility)
+
+    except Exception:
+        await db.rollback()
+
+        logger.exception(
+        "Database error while creating facility"
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to create facility"
+        )
 
     return new_facility
 
@@ -338,10 +371,23 @@ async def update_facility(
     if "capacity" in update_data:
         existing_facility.capacity = update_data["capacity"]
 
-    await db.commit()
-    await db.refresh(existing_facility)
+    try:
+        await db.commit()
+        await db.refresh(facility)  
+    except Exception:
+        await db.rollback()
 
-    return existing_facility
+        logger.exception(
+            "Database error while updating facility %s",
+            facility_id
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to update facility"
+        )
+
+    return facility
 
 @app.delete("/facilities/{facility_id}", status_code=204)
 async def delete_facility(
@@ -444,17 +490,33 @@ async def create_booking(
 
     db.add(new_booking)
 
-    await db.commit()
-    await db.refresh(new_booking)
-
     try:
-        await send_booking_notification(
+        await db.commit()
+        await db.refresh(new_booking)
+
+    except Exception:
+        await db.rollback()
+
+        logger.exception(
+            "Database error while creating booking"
+        )
+
+        raise HTTPException(
+                status_code=500,
+            detail="Unable to create booking"
+        )
+
+        try:
+            await send_booking_notification(
             user_email,
             f"Booking #{new_booking.id} has been confirmed"
-    )
+            )
 
-    except NotificationServiceError:
-        pass
+        except NotificationServiceError:
+            logger.warning(
+                "Booking notification failed for booking %s",
+            new_booking.id
+            )
 
     return new_booking
 
@@ -593,8 +655,22 @@ async def update_booking(
     if "purpose" in update_data:
         existing_booking.purpose = update_data["purpose"]
 
-    await db.commit()
-    await db.refresh(existing_booking)
+    try:
+        await db.commit()
+        await db.refresh(existing_booking)
+
+    except Exception:
+        await db.rollback()
+
+        logger.exception(
+            "Database error while updating booking %s",
+            booking_id
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to update booking"
+        )
 
     return existing_booking
 
@@ -623,4 +699,18 @@ async def delete_booking(
     # Delete the booking
     await db.delete(booking)
 
-    await db.commit()
+    try:
+        await db.commit()
+
+    except Exception:
+        await db.rollback()
+
+        logger.exception(
+            "Database error while deleting booking %s",
+            booking_id
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to delete booking"
+        )
