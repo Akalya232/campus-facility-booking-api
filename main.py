@@ -32,7 +32,22 @@ from datetime import date as Date, time
 import logging
 
 security = HTTPBearer(auto_error=False)
-app = FastAPI()
+app = FastAPI(
+    title="Campus Facility Booking API",
+    description=(
+        "A FastAPI backend for managing campus users, facilities, "
+        "and facility bookings with JWT authentication, "
+        "authorization, validation, search, filtering, "
+        "notifications, and reliable database transactions."
+    ),
+    version="1.0.0",
+    contact={
+        "name": "Campus Facility Booking API"
+    },
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
+)
 
 logging.basicConfig(
     level=logging.INFO,
