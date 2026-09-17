@@ -166,6 +166,14 @@ Start the development server:
 ```powershell
 uvicorn main:app --reload
 ```
+## Production Deployment
+
+For production, do not use `--reload`.
+
+Start the API with:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000
 
 The API will be available at:
 

@@ -115,8 +115,27 @@ async def get_my_profile(
 
 
 @app.get("/health")
-def health_check():
-    return {"status": "ok"}
+async def health_check(
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        await db.execute(select(1))
+
+        return {
+            "status": "ok",
+            "database": "connected"
+        }
+
+    except Exception:
+        logger.exception("Health check failed")
+
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "unhealthy",
+                "database": "unavailable"
+            }
+        )
 
 
 @app.post("/users", response_model=UserResponse, status_code=201)
