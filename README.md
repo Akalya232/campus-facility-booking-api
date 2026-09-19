@@ -217,7 +217,8 @@ GET /health
 
 ```json
 {
-  "status": "ok"
+  "status": "ok",
+  "database": "connected"
 }
 ```
 
@@ -551,3 +552,10 @@ Swagger:
 ```text
 http://127.0.0.1:8000/docs
 ```
+## Final Review Demo Sequence
+
+Use the following sequence to demonstrate the working backend:
+
+1. Start PostgreSQL and apply migrations:
+   ```bash
+   alembic upgrade head
